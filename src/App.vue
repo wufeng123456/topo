@@ -1,7 +1,5 @@
 <template>
   <div id="app" class="container">
-    <!--<div id="topo" class="topo" ref="topo"></div>-->
-    <button type="button" class="exit" @click="jsBack">退出</button>
   </div>
 </template>
 
@@ -17,52 +15,26 @@
       }
     },
     methods: {
-      jsBack () {
-//        返回按钮
-        var u = navigator.userAgent
-        var isAndroid = u.indexOf('Android') > -1 || u.indexOf('Linux') > -1
-        var isiOS = !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/) //ios终端
-        console.log('android test')
-        if (isAndroid) {
-//          Android端
-          console.log('is android')
-          window.android.back()
-        } else if (isiOS) {
-//          ios端
-        } else {
-//          pc端
-        }
-      },
       showd3 () {
 //        获取body高度和宽度
         let height = document.body.clientHeight
         let width = document.body.clientWidth
-
-        //移动端设备横竖屏重新加载页面
-        function change () {
-          window.location.reload()
-        }
-
-        window.addEventListener('onorientationchange' in window ? 'orientationchange' : 'resize', change, false)
 //        节点大小（圆圈大小）
-        const nodeSize = 35
+        const nodeSize = 50
 //        初始化时连接线的距离长度
         const linkDistance = 130
 //        赋值数据集
         var nodes = this.relation.nodes
         var links = this.relation.links
-        console.log(nodes)
 
 //      设置画布，获取id为app的对象，添加svg，这里的图像用了svg，意为可缩放矢量图形，它与其他图片格式相比较，svg更加小，因为是矢量图，放大不会失帧。具体可以自行百度svg相关知识
         var svg = d3.select('#app').append('svg')
-          .attr('xmlns', 'http://www.w3.org/2000/svg')
-          .attr('version', '2.0')
           .attr('class', 'svg')//给svg设置了一个class样式，主要作用是长宽设置为100%
 //        设置力布局，使用d3 v4版本的力导向布局
         var force = d3.forceSimulation()
           .force('center', d3.forceCenter(width / 2, height / 2))//设置力导向布局的中心点，创建一个力中心，设置为画布长宽的一半，所以拓扑图会在画布的中心点
           .force('charce', d3.forceManyBody().strength(-60))//节点间的作用力，如果不设置.strength(-60）的话，默认是-30
-          .force('collide', d3.forceCollide())//使用默认的半径创建一个碰撞作用力。radius默认所有的节点都为1
+          .force('collide', d3.forceCollide(nodeSize * 2))//使用默认的半径创建一个碰撞作用力。radius默认所有的节点都为1
 
 //        设置缩放
 //        svg下嵌套g标签，缩放都在g标签上进行
@@ -88,15 +60,15 @@
             .attr('id', 'resolved')
             //.attr("markerUnits","strokeWidth")//设置为strokeWidth箭头会随着线的粗细发生变化
             .attr('markerUnits', 'userSpaceOnUse')//用于确定marker是否进行缩放。取值strokeWidth和userSpaceOnUse，
-            .attr('viewBox', '0 -5 10 10')//坐标系的区域
-            .attr('refX', 39)//箭头坐标
-            .attr('refY', 0)
+            .attr('viewBox', '0 0 10 10')//坐标系的区域
+            .attr('refX', nodeSize)//箭头坐标
+            .attr('refY', 5)
             .attr('markerWidth', 12)//标识的大小
             .attr('markerHeight', 12)
             .attr('orient', 'auto')//绘制方向，可设定为：auto（自动确认方向）和 角度值
-            .attr('stroke-width', 2)//箭头宽度
+            // .attr('stroke-width', 2)//箭头宽度
             .append('path')
-            .attr('d', 'M0,-5L10,0L0,5')//箭头的路径
+            .attr('d', 'M0,0L10,5L0,10')//箭头的路径
             .attr('fill', '#ff7438')//箭头颜色
 
 //        设置连线
@@ -106,8 +78,29 @@
           .append('path')
           .attr('class', 'edgelabel')//添加class样式
           .style('stroke', '#ff7438')//添加颜色
-          .style('stroke-width', 1)//连接线粗细度
+          .style('stroke-width', 3)//连接线粗细度
           .attr('marker-end', 'url(#resolved)')//设置线的末尾为刚刚的箭头
+          .attr('cursor', 'pointer')
+          .on('mousemove', (d, i) => {
+            node.style('opacity', node => {
+              if (d.target.name === node.name || d.source.name === node.name) {
+                return 1
+              } else {
+                return 0.5
+              }
+            })
+            edgesLine.style('opacity', line => {
+              if (line.target.name === d.target.name && line.source.name === d.source.name) {
+                return 1
+              } else {
+                return 0.1
+              }
+            })
+          })
+          .on('mouseout', (d, i) => {
+            node.style('opacity', 1)
+            edgesLine.style('opacity', 1)
+          })
 //        设置连接线中间关系文本
         var edgesText = g.selectAll('.linetext')
           .data(links)
@@ -162,45 +155,38 @@
 //            为每个节点设置不同的id
             return 'node' + i
           })
-          .on('touchmove', (d, i) => {
-//            设置鼠标监听时间，当移动端手指移动时,设置关系文本透明度
-            edgesText.style('fill-opacity', function (edge) {
-              if (edge.source === d || edge.target === d) {
+          .on('mousemove', (d, i) => {
+            edgesText.style('opacity', function (edge) {
+              if (edge.source.name === d.name || edge.target.name === d.name) {
                 return 1.0
               } else {
-                return 0
+                return 0.1
               }
             })
-            /**
-             * 改本svg的层级，这个主要是因为在svg中z-index是无效的，svg根据绘制的先后顺序，后绘制的排在最上面，就像贴纸，
-             * 后贴的会盖住前面贴的。所以我们希望在被选中时，能够把节点和节点对应的文字提到最上一层，我们就可以通过d3来选择到点击的对象，然后通过raise方法来提到最上一层
-             * 下同
-             */
-            d3.select('#node' + i).raise()
-            d3.select('#nodetext' + i).raise()
-          })
-          .on('touchend', (d, i) => {
-//            手指移开后，所有关系文本设置透明度为1
-            edgesText.style('fill-opacity', function (edge) {
-              return 1.0
-            })
-          })
-          .on('mousedown', (d, i) => {
-            edgesText.style('fill-opacity', function (edge) {
-              if (edge.source === d || edge.target === d) {
-                return 1.0
+            var nodeSet = new Set()
+            edgesLine.style('opacity', function (line) {
+              if (line.source.name === d.name || line.target.name === d.name) {
+                nodeSet.add(line.source.name)
+                nodeSet.add(line.target.name)
+                return 1
               } else {
-                return 0
+                return 0.1
+              }
+            })
+            node.style('opacity', node => {
+              if (nodeSet.has(node.name)) {
+                return 1
+              } else {
+                return 0.5
               }
             })
             d3.select('#node' + i).raise()
             d3.select('#nodetext' + i).raise()
           })
           .on('mouseout', (d, i) => {
-            console.log('tttt')
-            edgesText.attr('fill-opacity', function (edge) {
-              return 1
-            })
+            edgesText.style('opacity', 1)
+            edgesLine.style('opacity', 1)
+            node.style('opacity', 1)
           })
           .call(drag)//监听拖动事件
 //
@@ -256,44 +242,44 @@
               }
             }
           })
-          .attr('cursor', 'default')//设置鼠标样式
-          .on('touchmove', (d, i) => {
-            edgesText.style('fill-opacity', function (edge) {
-              if (edge.source === d || edge.target === d) {
+          .attr('cursor', 'pointer')//设置鼠标样式
+          .on('mousemove', (d, i) => {
+            edgesText.style('opacity', function (edge) {
+              if (edge.source.name === d.name || edge.target.name === d.name) {
                 return 1.0
               } else {
-                return 0
+                return 0.1
               }
             })
-            //改本svg的层级
-            d3.select('#node' + i).raise()
-            d3.select('#nodetext' + i).raise()
-          })
-          .on('touchend', (d, i) => {
-            edgesText.style('fill-opacity', function (edge) {
-              return 1.0
-            })
-          })
-          .on('mousedown', (d, i) => {
-            edgesText.style('fill-opacity', function (edge) {
-              if (edge.source === d || edge.target === d) {
-                return 1.0
+            var nodeSet = new Set()
+            edgesLine.style('opacity', function (line) {
+              if (line.source.name === d.name || line.target.name === d.name) {
+                nodeSet.add(line.source.name)
+                nodeSet.add(line.target.name)
+                return 1
               } else {
-                return 0
+                return 0.1
+              }
+            })
+            g.selectAll('circle').style('opacity', node => {
+              if (nodeSet.has(node.name)) {
+                return 1
+              } else {
+                return 0.5
               }
             })
             d3.select('#node' + i).raise()
             d3.select('#nodetext' + i).raise()
           })
           .on('mouseout', (d, i) => {
-            edgesText.style('fill-opacity', function (edge) {
-              return 1.0
-            })
+            edgesText.style('opacity', 1)
+            edgesLine.style('opacity', 1)
+            g.selectAll('circle').style('opacity', 1)
           })
-          .call(drag)
+          .call(drag)//监听拖动事件
 //        设置node和edge
         force.nodes(nodes)
-          .force('link', d3.forceLink(links).distance(linkDistance).strength(0.1))
+          .force('link', d3.forceLink(links).distance(linkDistance).strength(1))
           .restart()
 //        tick 表示当运动进行中每更新一帧时
         force.on('tick', function () {
