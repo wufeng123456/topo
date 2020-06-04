@@ -1,5 +1,13 @@
 <template>
   <div id="app" class="container">
+    <div v-if="dialog"
+      :style="'top:' + tooltip.y + 'px;' + 'left:' + tooltip.x + 'px;'"
+      @mousemove="dialog = true"
+      @mouseout="dialog = false"
+      class="tooltip"
+    >
+      {{tooltip.name}}
+    </div>
   </div>
 </template>
 
@@ -11,11 +19,14 @@
     data () {
       return {
         relation: {},
-        cname: ''
+        cname: '',
+        dialog: false,
+        tooltip: null
       }
     },
     methods: {
       showd3 () {
+        const ts = this
 //        获取body高度和宽度
         let height = document.body.clientHeight
         let width = document.body.clientWidth
@@ -33,7 +44,7 @@
 //        设置力布局，使用d3 v4版本的力导向布局
         var force = d3.forceSimulation()
           .force('center', d3.forceCenter(width / 2, height / 2))//设置力导向布局的中心点，创建一个力中心，设置为画布长宽的一半，所以拓扑图会在画布的中心点
-          .force('charce', d3.forceManyBody().strength(-60))//节点间的作用力，如果不设置.strength(-60）的话，默认是-30
+          .force('charce', d3.forceManyBody().strength(0))//节点间的作用力，如果不设置.strength(-60）的话，默认是-30
           .force('collide', d3.forceCollide(nodeSize * 2))//使用默认的半径创建一个碰撞作用力。radius默认所有的节点都为1
 
 //        设置缩放
@@ -72,6 +83,7 @@
             .attr('fill', '#ff7438')//箭头颜色
 
 //        设置连线
+        let animationId = []
         var edgesLine = g.selectAll('line')
           .data(links)
           .enter()
@@ -82,6 +94,12 @@
           .attr('marker-end', 'url(#resolved)')//设置线的末尾为刚刚的箭头
           .attr('cursor', 'pointer')
           .on('mousemove', (d, i) => {
+            console.log(d)
+            ts.dialog = true
+            ts.tooltip = {}
+            ts.tooltip.x = event.x + 5
+            ts.tooltip.y = event.y + 5
+            ts.tooltip.name = d.relation
             node.style('opacity', node => {
               if (d.target.name === node.name || d.source.name === node.name) {
                 return 1
@@ -96,20 +114,37 @@
                 return 0.1
               }
             })
+            edgesLine.attr('stroke-dasharray', line => {
+              if (line.source.name === d.source.name && line.target.name === d.target.name) {
+                return [5, 2]
+              } else {
+                return 0
+              }
+            })
+            var index = 0
+            let animation = function () {
+              index += 1
+              edgesLine.attr('stroke-dashoffset', line => {
+                if (line.source.name === d.source.name && line.target.name === d.target.name) {
+                  return index * -0.1
+                } else {
+                  return 0
+                }
+              })
+              animationId.push(window.requestAnimationFrame(animation))
+            }
+            animation()
           })
           .on('mouseout', (d, i) => {
+            ts.dialog = false
             node.style('opacity', 1)
             edgesLine.style('opacity', 1)
-          })
-//        设置连接线中间关系文本
-        var edgesText = g.selectAll('.linetext')
-          .data(links)
-          .enter()
-          .append('text')
-          .attr('class', 'linetext')
-          .text((d) => {
-//          设置关系文本
-            return d.relation
+            edgesLine.attr('stroke-dasharray', line => {
+              return 0
+            })
+            for (let i = 0; i < animationId.length; i++) {
+              window.cancelAnimationFrame(animationId[i])
+            }
           })
 //        设置拖拽
         var drag = d3.drag()
@@ -156,13 +191,10 @@
             return 'node' + i
           })
           .on('mousemove', (d, i) => {
-            edgesText.style('opacity', function (edge) {
-              if (edge.source.name === d.name || edge.target.name === d.name) {
-                return 1.0
-              } else {
-                return 0.1
-              }
-            })
+            ts.dialog = true
+            ts.tooltip = d
+            ts.tooltip.x = event.x + 5
+            ts.tooltip.y = event.y + 5
             var nodeSet = new Set()
             edgesLine.style('opacity', function (line) {
               if (line.source.name === d.name || line.target.name === d.name) {
@@ -173,6 +205,26 @@
                 return 0.1
               }
             })
+            edgesLine.attr('stroke-dasharray', line => {
+              if (line.source.name === d.name || line.target.name === d.name) {
+                return [5, 2]
+              } else {
+                return 0
+              }
+            })
+            var index = 0
+            let animation = function () {
+              index += 1
+              edgesLine.attr('stroke-dashoffset', line => {
+                if (line.source.name === d.name || line.target.name === d.name) {
+                  return index * -0.1
+                } else {
+                  return 0
+                }
+              })
+              animationId.push(window.requestAnimationFrame(animation))
+            }
+            animation()
             node.style('opacity', node => {
               if (nodeSet.has(node.name)) {
                 return 1
@@ -181,100 +233,17 @@
               }
             })
             d3.select('#node' + i).raise()
-            d3.select('#nodetext' + i).raise()
           })
           .on('mouseout', (d, i) => {
-            edgesText.style('opacity', 1)
+            ts.dialog = false
             edgesLine.style('opacity', 1)
             node.style('opacity', 1)
-          })
-          .call(drag)//监听拖动事件
-//
-//
-// 节点文字
-        var nodeText = g.selectAll('.nodetext')
-          .data(nodes)
-          .enter()
-          .append('text')
-          .attr('text-anchor', 'middle')
-          .attr('class', 'nodetext')
-          .attr('id', (d, i) => {
-            return 'nodetext' + i
-          })
-          .attr('x', function (d, i) {
-            /**
-             * 由于svg的text不能进行换行，所以下面文字使用了tspan进行换行操作
-             */
-              //正则表达式
-            var reEn = /[a-zA-Z]+/g
-            //如果全英文则不换行
-            if (d.name.match(reEn)) {
-              d3.select(this).append('tspan')
-                .attr('class', 'nodetext')
-                .attr('fill', '#ff7438')
-                .text(function () { return d.name })
-            } else if (d.name.length <= 4) {
-              //文中小于4个字不换行
-              d3.select(this).append('tspan')
-                .attr('class', 'nodetext')
-                .attr('fill', '#ff7438')
-                .text(function () { return d.name })
-            } else {
-              if (d.name.length <= 8) {
-                //中文小于八个字，则分段进行换行
-                let top = d.name.substring(0, 4)
-                let bot = d.name.substring(4, 8)
-                //这里的this指代text dom，不懂的可以自行打印this查看
-                d3.select(this).append('tspan')
-                  .text(function () { return top })
-                d3.select(this).append('tspan')
-                  .attr('dy', '1.2em')//设置偏移
-                  .text(function () { return bot })
-              } else {
-                //中文大于8个字，分段并用...代替后面的字符
-                let top = d.name.substring(0, 4)
-                let bot = d.name.substring(4, 7) + '...'
-                d3.select(this).append('tspan')
-                  .text(function () { return top })
-                d3.select(this).append('tspan')
-                  .attr('dy', '1.2em')
-                  .text(function () { return bot })
-              }
+            edgesLine.attr('stroke-dasharray', line => {
+              return 0
+            })
+            for (let i = 0; i < animationId.length; i++) {
+              window.cancelAnimationFrame(animationId[i])
             }
-          })
-          .attr('cursor', 'pointer')//设置鼠标样式
-          .on('mousemove', (d, i) => {
-            edgesText.style('opacity', function (edge) {
-              if (edge.source.name === d.name || edge.target.name === d.name) {
-                return 1.0
-              } else {
-                return 0.1
-              }
-            })
-            var nodeSet = new Set()
-            edgesLine.style('opacity', function (line) {
-              if (line.source.name === d.name || line.target.name === d.name) {
-                nodeSet.add(line.source.name)
-                nodeSet.add(line.target.name)
-                return 1
-              } else {
-                return 0.1
-              }
-            })
-            g.selectAll('circle').style('opacity', node => {
-              if (nodeSet.has(node.name)) {
-                return 1
-              } else {
-                return 0.4
-              }
-            })
-            d3.select('#node' + i).raise()
-            d3.select('#nodetext' + i).raise()
-          })
-          .on('mouseout', (d, i) => {
-            edgesText.style('opacity', 1)
-            edgesLine.style('opacity', 1)
-            g.selectAll('circle').style('opacity', 1)
           })
           .call(drag)//监听拖动事件
 //        设置node和edge
@@ -289,31 +258,25 @@
             return path
           })
 
-          //更新连接线上文字的位置
-          edgesText.attr('x', function (d) {
-            return (d.source.x + d.target.x) / 2
-          })
-          edgesText.attr('y', function (d) { return (d.source.y + d.target.y) / 2 })
-
           //更新结点图片和文字
           node.attr('cx', function (d) {
             return d.x
           })
           node.attr('cy', function (d) { return d.y })
 
-          nodeText.attr('x', function (d) { return d.x })
-          nodeText.attr('y', function (d) { return d.y })
-          //动态更新sptan 的x的坐标
-          nodeText.selectAll('tspan')
-            .attr('x', function (d) {
-              return d.x
-            })
+          // nodeText.attr('x', function (d) { return d.x })
+          // nodeText.attr('y', function (d) { return d.y })
+          // //动态更新sptan 的x的坐标
+          // nodeText.selectAll('tspan')
+          //   .attr('x', function (d) {
+          //     return d.x
+          //   })
         })
       }
     },
     created () {
       this.$nextTick(() => {
-        this.relation = JSON.parse('{"nodes":[{"name":"BetterVicky","type":0},{"name":"杭州市高新区（滨江）萧宏小额贷款有限公司","type":1},{"name":"浙江合德建设有限公司","type":1},{"name":"杭州萧山党山企业担保有限公司","type":1},{"name":"林爱萍","type":2},{"name":"申盛集团有限公司","type":2}],"links":[{"source":0,"target":1,"relation":"对外投资"},{"source":0,"target":2,"relation":"对外投资"},{"source":0,"target":3,"relation":"对外投资"},{"source":4,"target":0,"relation":"投资"},{"source":5,"target":0,"relation":"投资"}],"code":200,"message":"请求成功"}')
+        this.relation = JSON.parse('{"nodes":[{"name":"BetterVicky","type":0},{"name":"杭州市高新区（滨江）萧宏小额贷款有限公司","type":1},{"name":"浙江合德建设有限公司","type":1},{"name":"杭州萧山党山企业担保有限公司","type":1},{"name":"林爱萍","type":2},{"name":"申盛集团有限公司","type":2}],"links":[{"source":0,"target":1,"relation":"对外投资"},{"source":0,"target":2,"relation":"对外投资"},{"source":0,"target":3,"relation":"对外投资"},{"source":1,"target":2,"relation":"合作"},{"source":4,"target":0,"relation":"投资"},{"source":5,"target":0,"relation":"投资"}],"code":200,"message":"请求成功"}')
         console.log(this.relation)
         this.showd3()
       })
@@ -324,6 +287,15 @@
 <style lang="stylus" rel="stylesheet/stylus">
   .container
     height 100%
+    .tooltip
+      position absolute
+      top 0
+      left 0
+      z-index 10
+      min-width 200px
+      max-width 500px
+      min-height 200px
+      background #f0f0f0
     .exit
       position absolute
       top 20px
