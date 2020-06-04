@@ -265,7 +265,7 @@
               if (nodeSet.has(node.name)) {
                 return 1
               } else {
-                return 0.5
+                return 0.4
               }
             })
             d3.select('#node' + i).raise()
